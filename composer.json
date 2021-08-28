@@ -1,0 +1,31 @@
+{
+    "name": "ed-smartass/yii2-settings",
+    "description": "Dynamic setting for Yii2 application",
+    "keywords": [
+        "yii2",
+        "yii2 settings",
+        "settings"
+    ],
+    "type": "yii2-extension",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Smartass\\Yii2Settings\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "ed-smartass",
+            "email": "62896221+ed-smartass@users.noreply.github.com"
+        }
+    ],
+    "require": {
+        "yiisoft/yii2": "~2.0.14"
+    },
+    "repositories": [
+        {
+          "type": "composer",
+          "url": "https://asset-packagist.org"
+        }
+    ]
+}
