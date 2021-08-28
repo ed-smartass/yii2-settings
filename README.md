@@ -11,7 +11,7 @@ composer require ed-smartass/yii2-settings
 2. Apply migrations
 
 ```
-php yii migrate --migrationPath=@vendor/ed-smartass/yii2-settings/migrations
+php yii migrate --migrationPath=@vendor/ed-smartass/yii2-settings/src/migrations
 ```
 
 Or add to console config
@@ -24,7 +24,7 @@ return [
             'class' => 'yii\console\controllers\MigrateController',
             'migrationPath' => [
                 '@console/migrations', // Default migration folder
-                '@vendor/ed-smartass/yii2-settings/migrations'
+                '@vendor/ed-smartass/yii2-settings/src/migrations'
             ]
         ]
         // ...
