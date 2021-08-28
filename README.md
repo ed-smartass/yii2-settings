@@ -91,7 +91,7 @@ Yii::$app->settings->access_token_ttl = 3600*24*7; // Only if setting `access_to
     * **$default** — default value if setting does not exist
     * **$saveDefault** — save default value if setting does not exist
 
-* **set($key, $value, $type = null)** — get setting by key
+* **set($key, $value, $type = null)** — set setting
     * **$key** — key of setting
     * **$value** — value of setting (if value is `null` setting will be deleted)
     * **$type** — type of setting (`integer`, `float`, `string`, `boolean`, `array`), if type is `null` when type will be auto detected
@@ -99,4 +99,4 @@ Yii::$app->settings->access_token_ttl = 3600*24*7; // Only if setting `access_to
 * **delete($key)** — delete setting by key
     * **$key** — key of setting
 
-* **flush($key)** — deleting all settings
+* **flush()** — deleting all settings
