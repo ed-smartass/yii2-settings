@@ -37,6 +37,10 @@ return [
 ```php
 return [
     // ...
+    'bootstrap' => [
+        // ...
+        'settings'
+    ],
     'components' => [
         // ...
         'settings' => [
@@ -59,8 +63,13 @@ return [
 
             // Cache duration for settings. Default: `null`.
             'cacheDuration' => null, 
+
+            // If you want to change Application config set to `true`
+            // and set value at config like `'language' => '%main.language|ru%'`.
+            // Where: `main.language` is setting name and `ru` is default value
+            // Default: `false`.
+            'processConfig' => false, 
         ]
-        // ...
     ]
     // ...
 ];
