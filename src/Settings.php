@@ -3,6 +3,7 @@
 namespace Smartass\Yii2Settings;
 
 use Yii;
+use yii\base\Application;
 use yii\base\Component;
 use yii\db\Query;
 use yii\helpers\ArrayHelper;
@@ -85,6 +86,13 @@ class Settings extends Component
     public $cacheDuration = null;
 
     /**
+     * Обработка конфига приложения. 
+     *
+     * @var boolean
+     */
+    public $processConfig = false;
+
+    /**
      * Настройки. 
      *
      * @var array|null
@@ -99,6 +107,40 @@ class Settings extends Component
         parent::init();
 
         /** @todo Валидация параметров */
+
+        if ($this->processConfig) {
+            Yii::$app->on(Application::EVENT_BEFORE_ACTION, function() {
+                foreach(Yii::$app->getComponents() as $id => $definition) {
+                    Yii::$app->set($id, $this->processConfig($definition));
+                }
+            });
+        }
+    }
+
+    /**
+     * @param array $definitions
+     * @return array
+     */
+    protected function processConfig($definitions)
+    {
+        if (is_array($definitions)) {
+            foreach($definitions as $key => $value) {
+                if (is_string($value)) {
+                    if (preg_match('/%(.*?)\|(.*?)%/', $value, $matches) === 1) {
+                        $definitions[$key] = $this->get($matches[1], $matches[2]);
+                    } else if (preg_match('/%(.*?)%/', $value, $matches) === 1) {
+                        if (isset($this->settings[$matches[1]])) {
+                            $definitions[$key] = $this->settings[$matches[1]];
+                        }
+                    }
+                    
+                } else if (is_array($value)) {
+                    $definitions[$key] = $this->processConfig($definitions[$key]);
+                }
+            }
+        }
+
+        return $definitions;
     }
 
     /**
