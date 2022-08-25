@@ -398,4 +398,12 @@ class Settings extends Component
                 ->delete($this->cacheComponent);
         }
     }
+
+    /**
+     * @return void
+     */
+    public function refresh()
+    {
+        $this->_settings = null;
+    }
 }
