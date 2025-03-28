@@ -6,6 +6,7 @@ use Yii;
 use yii\base\Application;
 use yii\base\Component;
 use yii\db\Query;
+use yii\di\Instance;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Json;
 
@@ -44,43 +45,26 @@ class Settings extends Component
     const TYPE_ARRAY = 'array';
 
     /**
-     * Таблица хранения настроек.
-     *
      * @var string
      */
     public $table = '{{%setting}}';
 
     /**
-     * Название компонента БД. 
-     *
-     * @var string
+     * @var \yii\db\Connection
      */
-    public $dbComponent = 'db';
+    public $db = 'db';
 
     /**
-     * Использование кеша. 
-     *
-     * @var boolean
+     * @var \yii\caching\Cache|null
      */
-    public $cache = false;
+    public $cache = 'cache';
 
     /**
-     * Название компонента кеша. 
-     *
-     * @var string
-     */
-    public $cacheComponent = 'cache';
-
-    /**
-     * Ключ хранения настроек в кеше. 
-     *
      * @var string
      */
     public $cacheKey = 'settings';
 
     /**
-     * Длительность кеширования. 
-     *
      * @var int|null
      */
     public $cacheDuration = null;
@@ -106,7 +90,13 @@ class Settings extends Component
     {
         parent::init();
 
-        /** @todo Валидация параметров */
+        $this->db = Instance::ensure($this->db, \yii\db\Connection::class);
+
+        $this->cache = $this->cache ? Instance::ensure($this->cache, \yii\caching\Cache::class) : null;
+
+        if ($this->cache && !$this->cacheKey) {
+            throw new \yii\base\InvalidConfigException('The "cacheKey" property must be set when using cache.');
+        }
 
         if ($this->processConfig) {
             Yii::$app->on(Application::EVENT_BEFORE_ACTION, function() {
@@ -192,9 +182,11 @@ class Settings extends Component
     {
         if ($this->_settings === null) {
             if ($this->cache) {
-                $this->_settings = Yii::$app->get($this->cacheComponent)->getOrSet($this->cacheKey, function() {
+                $this->_settings = $this->cache->getOrSet($this->cacheKey, function() {
                     return $this->fetchSettings();
-                }, $this->cacheDuration);
+                }, $this->cacheDuration, new \yii\caching\DbDependency([
+                    'sql' => 'SELECT MAX(updated_at), COUNT(*) FROM ' . $this->table
+                ]));
             } else {
                 $this->_settings = $this->fetchSettings();
             }
@@ -215,7 +207,7 @@ class Settings extends Component
         $query = (new Query())
             ->from($this->table);
 
-        foreach($query->each(100, Yii::$app->get($this->dbComponent)) as $setting) {
+        foreach($query->each(100, Yii::$app->db) as $setting) {
             $settings[$setting['key']] = $this->decodeValue($setting['value'], $setting['type']);
         }
 
@@ -319,55 +311,24 @@ class Settings extends Component
      */
     public function set($key, $value, $type = null)
     {
-        if ($this->_settings === null) {
-            $this->_settings = $this->fetchSettings();  
-        }
-
         if ($value === null) {
-            unset($this->_settings[$key]);
-
-            if ($this->cache) {
-                Yii::$app->get($this->cacheComponent)->set($this->cacheKey, $this->_settings, $this->cacheDuration);
-            }
-
-            return;
-        }
-
-        if (!$type) {
-            $type = $this->detectType($value);
-        }
-        
-        $exists = (new Query())
-            ->from($this->table)
-            ->andWhere(['key' => $key])
-            ->limit(1)
-            ->exists(Yii::$app->get($this->dbComponent));
-
-        if ($exists) {
-            Yii::$app->get($this->dbComponent)
-                ->createCommand()
-                ->update($this->table, [
-                    'type' => $type,
-                    'value' => $this->encodeValue($value, $type),
-                    'updated_at' => date('Y-m-d H:i:s')
-                ], ['key' => $key])
+            $this->db->createCommand()
+                ->delete($this->table, ['key' => $key])
                 ->execute();
         } else {
-            Yii::$app->get($this->dbComponent)
-                ->createCommand()
-                ->insert($this->table, [
-                    'key' => $key,
-                    'type' => $type,
-                    'value' => $this->encodeValue($value, $type)
-                ])
-                ->execute();
+            if (!in_array($type, [static::TYPE_INTEGER, static::TYPE_FLOAT, static::TYPE_STRING, static::TYPE_BOOLEAN, static::TYPE_ARRAY])) {
+                $type = $this->detectType($value);
+            }
+            
+            $this->db->createCommand()->upsert($this->table, [
+                'key' => $key,
+                'type' => $type,
+                'value' => $this->encodeValue($value, $type),
+                'updated_at' => date('Y-m-d H:i:s')
+            ])->execute();
         }
 
-        ArrayHelper::setValue($this->_settings, $key, $value);
-
-        if ($this->cache) {
-            Yii::$app->get($this->cacheComponent)->set($this->cacheKey, $this->_settings, $this->cacheDuration);
-        }
+        $this->refresh();
     }
 
     /**
@@ -388,15 +349,12 @@ class Settings extends Component
      */
     public function flush()
     {
-        Yii::$app->get($this->dbComponent)
+        $this->db
             ->createCommand()
             ->delete($this->table)
             ->execute();
-
-        if ($this->cache) {
-            Yii::$app->get($this->cacheComponent)
-                ->delete($this->cacheComponent);
-        }
+            
+        $this->refresh();
     }
 
     /**
@@ -405,5 +363,9 @@ class Settings extends Component
     public function refresh()
     {
         $this->_settings = null;
+
+        if ($this->cache) {
+            $this->cache->delete($this->cacheKey);
+        }
     }
 }

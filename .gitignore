@@ -26,6 +26,7 @@ composer.lock
 phpunit.phar
 # local phpunit config
 /phpunit.xml
+/.phpunit.result.cache
 
 # vagrant runtime
 /.vagrant

@@ -1,5 +1,20 @@
-# yii2-settings
+# Yii2 Settings
 
+A simple, flexible and efficient key-value storage extension for Yii2 applications. This extension allows you to store application settings in the database and optionally cache them for better performance.
+
+[![Latest Stable Version](https://poser.pugx.org/ed-smartass/yii2-settings/v/stable)](https://packagist.org/packages/ed-smartass/yii2-settings)
+[![Total Downloads](https://poser.pugx.org/ed-smartass/yii2-settings/downloads)](https://packagist.org/packages/ed-smartass/yii2-settings)
+[![License](https://poser.pugx.org/ed-smartass/yii2-settings/license)](https://packagist.org/packages/ed-smartass/yii2-settings)
+
+## Features
+
+- Store application settings in a database table
+- Support for multiple data types (integer, float, string, boolean, array)
+- Automatic type detection
+- Cache integration for improved performance
+- Access settings as component properties
+- Process application configuration with settings
+- Easy to integrate with existing Yii2 applications
 
 ### Installation
 
@@ -49,19 +64,17 @@ return [
             // Name of table with settings. Default: `{{%setting}}`.
             'table' => '{{%setting}}',
 
-            // ID of db commponent in application. Default: `db`. 
-            'dbComponent' => 'db',
+            // ID of db component in application. Default: `db`. 
+            'db' => 'db',
 
-            // If you want to cache setting. Default: `false`.
-            'cache' => true, 
-
-            // ID of cache commponent in application. Default: `cache`.
-            'cacheComponent' => 'cache', 
+            // ID of cache component in application. Default: `cache`.
+            // Set to `null` to disable caching. 
+            'cache' => 'cache', 
 
             // Key for storing settings in cache. Default: `settings`.
             'cacheKey' => 'settings', 
 
-            // Cache duration for settings. Default: `null`.
+            // Cache duration for settings. Default: `null` (no expiration).
             'cacheDuration' => null, 
 
             // If you want to change Application config set to `true`
@@ -89,9 +102,19 @@ Yii::$app->settings->access_token_ttl;
 // Set setting
 Yii::$app->settings->set('access_token_ttl', 3600*24*7);
 // Or
-Yii::$app->settings->access_token_ttl = 3600*24*7; // Only if setting `access_token_ttl` already exist
-```
+Yii::$app->settings->access_token_ttl = 3600*24*7; // Only if setting `access_token_ttl` already exists
 
+// Delete setting
+Yii::$app->settings->delete('access_token_ttl');
+// Or
+Yii::$app->settings->set('access_token_ttl', null);
+
+// Delete all settings
+Yii::$app->settings->flush();
+
+// Refresh cache
+Yii::$app->settings->refresh();
+```
 
 ### Methods
 
@@ -103,9 +126,19 @@ Yii::$app->settings->access_token_ttl = 3600*24*7; // Only if setting `access_to
 * **set($key, $value, $type = null)** — set setting
     * **$key** — key of setting
     * **$value** — value of setting (if value is `null` setting will be deleted)
-    * **$type** — type of setting (`integer`, `float`, `string`, `boolean`, `array`), if type is `null` when type will be auto detected
+    * **$type** — type of setting (`integer`, `float`, `string`, `boolean`, `array`), if type is `null` then type will be automatically detected
 
 * **delete($key)** — delete setting by key
     * **$key** — key of setting
 
-* **flush()** — deleting all settings
+* **flush()** — delete all settings
+
+* **refresh()** — clear the internal settings cache and delete cache entry if caching is enabled
+
+### Supported Value Types
+
+* `integer` — Integer values
+* `float` — Float values
+* `string` — String values
+* `boolean` — Boolean values
+* `array` — Array values (stored as JSON)
