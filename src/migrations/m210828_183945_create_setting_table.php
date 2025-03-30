@@ -17,9 +17,14 @@ class m210828_183945_create_setting_table extends Migration
             'type' => $this->string(),
             'value' => $this->text(),
             'created_at' => $this->dateTime()->defaultExpression('CURRENT_TIMESTAMP'),
-            'updated_at' => $this->dateTime()->defaultExpression('CURRENT_TIMESTAMP'),
-            'PRIMARY KEY(key)'
+            'updated_at' => $this->dateTime()->defaultExpression('CURRENT_TIMESTAMP')
         ]);
+
+        $this->addPrimaryKey(
+            'pk-setting',
+            '{{%setting}}',
+            'key'
+        );
     }
 
     /**
