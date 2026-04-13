@@ -1,6 +1,6 @@
 # Yii2 Settings
 
-A simple, flexible and efficient key-value storage extension for Yii2 applications. This extension allows you to store application settings in the database and optionally cache them for better performance.
+Dynamic key-value settings for Yii2 with database storage, automatic type casting, and caching.
 
 [![Latest Stable Version](https://poser.pugx.org/ed-smartass/yii2-settings/v/stable)](https://packagist.org/packages/ed-smartass/yii2-settings)
 [![Total Downloads](https://poser.pugx.org/ed-smartass/yii2-settings/downloads)](https://packagist.org/packages/ed-smartass/yii2-settings)
@@ -8,137 +8,384 @@ A simple, flexible and efficient key-value storage extension for Yii2 applicatio
 
 ## Features
 
-- Store application settings in a database table
-- Support for multiple data types (integer, float, string, boolean, array)
-- Automatic type detection
-- Cache integration for improved performance
-- Access settings as component properties
-- Process application configuration with settings
-- Easy to integrate with existing Yii2 applications
+- Database-backed key-value storage
+- Five value types: `integer`, `float`, `string`, `boolean`, `array` (JSON)
+- Automatic type detection on write, strict type casting on read
+- Optional caching with `DbDependency` auto-invalidation
+- Magic property access: `$settings->key` to read/write
+- Config placeholders: inject settings into component configs via `%setting.name|default%`
+- Works with any RDBMS supported by Yii2 (MySQL, PostgreSQL, SQLite, etc.)
+- PHP 7.2+ and PHP 8.x compatible
 
-### Installation
+## Installation
 
-1. Install via composer
-```
+```bash
 composer require ed-smartass/yii2-settings
 ```
 
-2. Apply migrations
+Run the migration:
 
-```
+```bash
 php yii migrate --migrationPath=@vendor/ed-smartass/yii2-settings/src/migrations
 ```
 
-Or add to console config
+Or register the migration path in console config:
+
 ```php
 return [
-    // ...
     'controllerMap' => [
-        // ...
         'migrate' => [
             'class' => 'yii\console\controllers\MigrateController',
             'migrationPath' => [
-                '@console/migrations', // Default migration folder
-                '@vendor/ed-smartass/yii2-settings/src/migrations'
-            ]
-        ]
-        // ...
-    ]
-    // ...
+                '@console/migrations',
+                '@vendor/ed-smartass/yii2-settings/src/migrations',
+            ],
+        ],
+    ],
 ];
 ```
 
-3. Config application
+## Configuration
+
 ```php
 return [
-    // ...
-    'bootstrap' => [
-        // ...
-        'settings'
-    ],
     'components' => [
-        // ...
         'settings' => [
             'class' => 'Smartass\Yii2Settings\Settings',
 
-            // Name of table with settings. Default: `{{%setting}}`.
+            // Table name. Default: '{{%setting}}'
             'table' => '{{%setting}}',
 
-            // ID of db component in application. Default: `db`. 
+            // DB connection component ID. Default: 'db'
             'db' => 'db',
 
-            // ID of cache component in application. Default: `cache`.
-            // Set to `null` to disable caching. 
-            'cache' => 'cache', 
+            // Cache component ID, or null to disable caching. Default: 'cache'
+            'cache' => 'cache',
 
-            // Key for storing settings in cache. Default: `settings`.
-            'cacheKey' => 'settings', 
+            // Cache key prefix. Default: 'settings'
+            'cacheKey' => 'settings',
 
-            // Cache duration for settings. Default: `null` (no expiration).
-            'cacheDuration' => null, 
+            // Cache TTL in seconds, null = no expiration. Default: null
+            'cacheDuration' => null,
 
-            // If you want to change Application config set to `true`
-            // and set value at config like `'language' => '%main.language|ru%'`.
-            // Where: `main.language` is setting name and `ru` is default value
-            // Default: `false`.
-            'processConfig' => false, 
-        ]
-    ]
-    // ...
+            // Replace %placeholders% in component configs. Default: false
+            'processConfig' => false,
+        ],
+    ],
 ];
 ```
 
-### Usage
+## Usage
+
+### Basic operations
 
 ```php
-// List all settings
-Yii::$app->settings->settings
+$settings = Yii::$app->settings;
 
-// Get setting
-Yii::$app->settings->get('access_token_ttl');
-// Or
-Yii::$app->settings->access_token_ttl;
+// Set
+$settings->set('site.name', 'My App');
+$settings->set('per_page', 25);
+$settings->set('maintenance', false);
+$settings->set('mail.providers', ['smtp', 'sendmail']);
 
-// Set setting
-Yii::$app->settings->set('access_token_ttl', 3600*24*7);
-// Or
-Yii::$app->settings->access_token_ttl = 3600*24*7; // Only if setting `access_token_ttl` already exists
+// Get
+$settings->get('site.name');                    // 'My App'
+$settings->get('missing_key');                  // null
+$settings->get('missing_key', 'fallback');      // 'fallback'
+$settings->get('theme', 'default', true);       // 'default' (also saved to DB)
 
-// Delete setting
-Yii::$app->settings->delete('access_token_ttl');
-// Or
-Yii::$app->settings->set('access_token_ttl', null);
+// Delete
+$settings->delete('site.name');
 
-// Delete all settings
-Yii::$app->settings->flush();
+// Delete all
+$settings->flush();
 
-// Refresh cache
-Yii::$app->settings->refresh();
+// Force reload from database
+$settings->refresh();
+
+// Get all settings as array
+$settings->settings; // ['per_page' => 25, 'maintenance' => false, ...]
 ```
 
-### Methods
+### Magic property access
 
-* **get($key, $default = null, $saveDefault = false)** — get setting by key
-    * **$key** — key of setting
-    * **$default** — default value if setting does not exist
-    * **$saveDefault** — save default value if setting does not exist
+```php
+// Read
+$name = Yii::$app->settings->site_name;
 
-* **set($key, $value, $type = null)** — set setting
-    * **$key** — key of setting
-    * **$value** — value of setting (if value is `null` setting will be deleted)
-    * **$type** — type of setting (`integer`, `float`, `string`, `boolean`, `array`), if type is `null` then type will be automatically detected
+// Write (creates or updates)
+Yii::$app->settings->site_name = 'New Name';
+```
 
-* **delete($key)** — delete setting by key
-    * **$key** — key of setting
+### Explicit type override
 
-* **flush()** — delete all settings
+By default the type is detected automatically. You can force a specific type:
 
-* **refresh()** — clear the internal settings cache and delete cache entry if caching is enabled
+```php
+use Smartass\Yii2Settings\Settings;
 
-### Supported Value Types
+// Store numeric string as integer
+$settings->set('port', '8080', Settings::TYPE_INTEGER);
 
-* `integer` — Integer values
-* `float` — Float values
-* `string` — String values
-* `boolean` — Boolean values
-* `array` — Array values (stored as JSON)
+// Store integer as string
+$settings->set('code', 42, Settings::TYPE_STRING);
+```
+
+### Config placeholders
+
+Enable `processConfig` to inject settings into not-yet-initialized component configs:
+
+```php
+// app config
+return [
+    'components' => [
+        'settings' => [
+            'class' => 'Smartass\Yii2Settings\Settings',
+            'processConfig' => true,
+        ],
+        'mailer' => [
+            'class' => 'yii\swiftmailer\Mailer',
+            'transport' => [
+                'class' => 'Swift_SmtpTransport',
+                'host' => '%mail.host|smtp.example.com%',  // setting name | default
+                'port' => '%mail.port%',                    // setting name (no default)
+            ],
+        ],
+    ],
+];
+```
+
+Syntax: `%setting.name|default_value%` or `%setting.name%`
+
+## API Reference
+
+### `get($key, $default = null, $saveDefault = false)`
+
+Returns the value for `$key`, or `$default` if not found. When `$saveDefault` is `true`, the default value is persisted to the database.
+
+### `set($key, $value, $type = null)`
+
+Creates or updates a setting. Passing `null` as `$value` deletes the setting. The `$type` parameter accepts one of the `Settings::TYPE_*` constants; when omitted, the type is detected automatically.
+
+### `delete($key)`
+
+Deletes a setting by key.
+
+### `flush()`
+
+Deletes all settings.
+
+### `refresh()`
+
+Clears the in-memory cache and invalidates the cache entry, forcing the next read to hit the database.
+
+### Property: `$settings`
+
+Returns all settings as an associative array `['key' => value, ...]`.
+
+## Supported Types
+
+| Type | Constant | PHP type | Storage |
+|------|----------|----------|---------|
+| `integer` | `Settings::TYPE_INTEGER` | `int` | String representation |
+| `float` | `Settings::TYPE_FLOAT` | `float` | String representation |
+| `string` | `Settings::TYPE_STRING` | `string` | As-is |
+| `boolean` | `Settings::TYPE_BOOLEAN` | `bool` | `0` / `1` |
+| `array` | `Settings::TYPE_ARRAY` | `array` | JSON |
+
+## Testing
+
+```bash
+composer install
+vendor/bin/phpunit
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+---
+
+# Yii2 Settings (Русский)
+
+Расширение для хранения динамических настроек приложения Yii2 в базе данных с поддержкой кэширования и автоматического приведения типов.
+
+## Возможности
+
+- Хранение настроек в таблице БД (ключ-значение)
+- Пять типов данных: `integer`, `float`, `string`, `boolean`, `array` (JSON)
+- Автоматическое определение типа при записи, строгое приведение при чтении
+- Кэширование с автоматической инвалидацией через `DbDependency`
+- Доступ через магические свойства: `$settings->key`
+- Подстановка настроек в конфиги компонентов: `%setting.name|default%`
+- Работает с любой СУБД, поддерживаемой Yii2
+- Совместим с PHP 7.2+ и PHP 8.x
+
+## Установка
+
+```bash
+composer require ed-smartass/yii2-settings
+```
+
+Выполните миграцию:
+
+```bash
+php yii migrate --migrationPath=@vendor/ed-smartass/yii2-settings/src/migrations
+```
+
+Или зарегистрируйте путь миграций в конфигурации консоли:
+
+```php
+return [
+    'controllerMap' => [
+        'migrate' => [
+            'class' => 'yii\console\controllers\MigrateController',
+            'migrationPath' => [
+                '@console/migrations',
+                '@vendor/ed-smartass/yii2-settings/src/migrations',
+            ],
+        ],
+    ],
+];
+```
+
+## Конфигурация
+
+```php
+return [
+    'components' => [
+        'settings' => [
+            'class' => 'Smartass\Yii2Settings\Settings',
+
+            // Имя таблицы. По умолчанию: '{{%setting}}'
+            'table' => '{{%setting}}',
+
+            // Компонент подключения к БД. По умолчанию: 'db'
+            'db' => 'db',
+
+            // Компонент кэша или null для отключения. По умолчанию: 'cache'
+            'cache' => 'cache',
+
+            // Ключ кэша. По умолчанию: 'settings'
+            'cacheKey' => 'settings',
+
+            // Время жизни кэша (сек), null = бессрочно. По умолчанию: null
+            'cacheDuration' => null,
+
+            // Подставлять %плейсхолдеры% в конфиги компонентов. По умолчанию: false
+            'processConfig' => false,
+        ],
+    ],
+];
+```
+
+## Использование
+
+### Основные операции
+
+```php
+$settings = Yii::$app->settings;
+
+// Запись
+$settings->set('site.name', 'Мой сайт');
+$settings->set('per_page', 25);
+$settings->set('maintenance', false);
+$settings->set('mail.providers', ['smtp', 'sendmail']);
+
+// Чтение
+$settings->get('site.name');                    // 'Мой сайт'
+$settings->get('missing_key');                  // null
+$settings->get('missing_key', 'fallback');      // 'fallback'
+$settings->get('theme', 'default', true);       // 'default' (также сохраняется в БД)
+
+// Удаление
+$settings->delete('site.name');
+
+// Удаление всех настроек
+$settings->flush();
+
+// Принудительная перезагрузка из БД
+$settings->refresh();
+
+// Все настройки в виде массива
+$settings->settings; // ['per_page' => 25, 'maintenance' => false, ...]
+```
+
+### Магические свойства
+
+```php
+// Чтение
+$name = Yii::$app->settings->site_name;
+
+// Запись (создаёт или обновляет)
+Yii::$app->settings->site_name = 'Новое имя';
+```
+
+### Явное указание типа
+
+```php
+use Smartass\Yii2Settings\Settings;
+
+// Сохранить числовую строку как integer
+$settings->set('port', '8080', Settings::TYPE_INTEGER);
+
+// Сохранить число как string
+$settings->set('code', 42, Settings::TYPE_STRING);
+```
+
+### Подстановка в конфиги
+
+Включите `processConfig` для подстановки настроек в конфиги ещё не инициализированных компонентов:
+
+```php
+return [
+    'components' => [
+        'settings' => [
+            'class' => 'Smartass\Yii2Settings\Settings',
+            'processConfig' => true,
+        ],
+        'mailer' => [
+            'class' => 'yii\swiftmailer\Mailer',
+            'transport' => [
+                'class' => 'Swift_SmtpTransport',
+                'host' => '%mail.host|smtp.example.com%',  // имя настройки | значение по умолчанию
+                'port' => '%mail.port%',                    // имя настройки (без значения по умолчанию)
+            ],
+        ],
+    ],
+];
+```
+
+Синтаксис: `%setting.name|default_value%` или `%setting.name%`
+
+## Справочник API
+
+| Метод | Описание |
+|-------|----------|
+| `get($key, $default, $saveDefault)` | Получить значение. `$saveDefault = true` сохраняет значение по умолчанию в БД |
+| `set($key, $value, $type)` | Создать/обновить настройку. `$value = null` удаляет запись |
+| `delete($key)` | Удалить настройку |
+| `flush()` | Удалить все настройки |
+| `refresh()` | Сбросить кэш, следующее чтение обратится к БД |
+| `$settings->settings` | Все настройки в виде массива `['key' => value, ...]` |
+
+## Типы данных
+
+| Тип | Константа | PHP-тип | Хранение |
+|-----|-----------|---------|----------|
+| `integer` | `Settings::TYPE_INTEGER` | `int` | Строковое представление |
+| `float` | `Settings::TYPE_FLOAT` | `float` | Строковое представление |
+| `string` | `Settings::TYPE_STRING` | `string` | Как есть |
+| `boolean` | `Settings::TYPE_BOOLEAN` | `bool` | `0` / `1` |
+| `array` | `Settings::TYPE_ARRAY` | `array` | JSON |
+
+## Тестирование
+
+```bash
+composer install
+vendor/bin/phpunit
+```
+
+## Лицензия
+
+MIT. См. [LICENSE](LICENSE).
