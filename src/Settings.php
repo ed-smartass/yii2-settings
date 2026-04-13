@@ -116,9 +116,9 @@ class Settings extends Component
         if (is_array($definitions)) {
             foreach($definitions as $key => $value) {
                 if (is_string($value)) {
-                    if (preg_match('/%(.*?)\|(.*?)%/', $value, $matches) === 1) {
+                    if (preg_match('/^%([^|%]+)\|([^%]*)%$/', $value, $matches) === 1) {
                         $definitions[$key] = $this->get($matches[1], $matches[2]);
-                    } else if (preg_match('/%(.*?)%/', $value, $matches) === 1) {
+                    } else if (preg_match('/^%([^|%]+)%$/', $value, $matches) === 1) {
                         if (isset($this->settings[$matches[1]])) {
                             $definitions[$key] = $this->settings[$matches[1]];
                         }
@@ -158,7 +158,7 @@ class Settings extends Component
      */
     public function canSetProperty($name, $checkVars = true, $checkBehaviors = true)
     {
-        return isset($this->settings[$name]) || parent::canSetProperty($name, $checkVars, $checkBehaviors);
+        return parent::canSetProperty($name, $checkVars, $checkBehaviors) || !method_exists($this, 'get' . $name);
     }
 
     /**
@@ -166,10 +166,10 @@ class Settings extends Component
      */
     public function __set($name, $value)
     {
-        if (isset($this->settings[$name])) {
-            $this->set($name, $value);
-        } else {
+        if (parent::canSetProperty($name)) {
             parent::__set($name, $value);
+        } else {
+            $this->set($name, $value);
         }
     }
 
@@ -182,10 +182,12 @@ class Settings extends Component
     {
         if ($this->_settings === null) {
             if ($this->cache) {
+                $tableName = $this->db->getSchema()->getRawTableName($this->table);
                 $this->_settings = $this->cache->getOrSet($this->cacheKey, function() {
                     return $this->fetchSettings();
                 }, $this->cacheDuration, new \yii\caching\DbDependency([
-                    'sql' => 'SELECT MAX(updated_at), COUNT(*) FROM ' . $this->table
+                    'db' => $this->db,
+                    'sql' => 'SELECT MAX(updated_at), COUNT(*) FROM ' . $this->db->quoteTableName($tableName),
                 ]));
             } else {
                 $this->_settings = $this->fetchSettings();
@@ -207,7 +209,7 @@ class Settings extends Component
         $query = (new Query())
             ->from($this->table);
 
-        foreach($query->each(100, Yii::$app->db) as $setting) {
+        foreach($query->each(100, $this->db) as $setting) {
             $settings[$setting['key']] = $this->decodeValue($setting['value'], $setting['type']);
         }
 
@@ -225,19 +227,15 @@ class Settings extends Component
         switch ($type) {
             case static::TYPE_ARRAY:
                 return Json::decode($value);
-                break;
             case static::TYPE_INTEGER:
                 return (int)$value;
-                break;
             case static::TYPE_FLOAT:
                 return (float)$value;
-                break;
             case static::TYPE_BOOLEAN:
                 return (bool)$value;
-                break;
             case static::TYPE_STRING:
+            default:
                 return (string)$value;
-                break;
         }
     }
 
@@ -320,11 +318,14 @@ class Settings extends Component
                 $type = $this->detectType($value);
             }
             
+            $now = date('Y-m-d H:i:s');
+
             $this->db->createCommand()->upsert($this->table, [
                 'key' => $key,
                 'type' => $type,
                 'value' => $this->encodeValue($value, $type),
-                'updated_at' => date('Y-m-d H:i:s')
+                'created_at' => $now,
+                'updated_at' => $now,
             ])->execute();
         }
 
