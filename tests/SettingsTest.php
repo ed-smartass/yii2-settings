@@ -601,6 +601,10 @@ class SettingsTest extends TestCase
         // Force-initialize db and settings (these are now "loaded" instances)
         $db = \Yii::$app->db;
         $settings = \Yii::$app->settings;
+
+        // Call bootstrap() to register the EVENT_BEFORE_ACTION handler
+        $settings->bootstrap(\Yii::$app);
+
         $this->assertTrue(\Yii::$app->has('db', true));
 
         // Remember the db instance identity before the event
