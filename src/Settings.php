@@ -7,7 +7,6 @@ use yii\base\Application;
 use yii\base\Component;
 use yii\db\Query;
 use yii\di\Instance;
-use yii\helpers\ArrayHelper;
 use yii\helpers\Json;
 
 /**
@@ -77,11 +76,16 @@ class Settings extends Component
     public $processConfig = false;
 
     /**
-     * Настройки. 
+     * Настройки.
      *
      * @var array|null
      */
     protected $_settings;
+
+    /**
+     * @var bool
+     */
+    protected $_initialized = false;
 
     /**
      * {@inheritdoc}
@@ -98,10 +102,14 @@ class Settings extends Component
             throw new \yii\base\InvalidConfigException('The "cacheKey" property must be set when using cache.');
         }
 
+        $this->_initialized = true;
+
         if ($this->processConfig) {
             Yii::$app->on(Application::EVENT_BEFORE_ACTION, function() {
-                foreach(Yii::$app->getComponents() as $id => $definition) {
-                    Yii::$app->set($id, $this->processConfig($definition));
+                foreach (Yii::$app->getComponents() as $id => $definition) {
+                    if (is_array($definition) && !Yii::$app->has($id, true)) {
+                        Yii::$app->set($id, $this->processConfig($definition));
+                    }
                 }
             });
         }
@@ -116,11 +124,12 @@ class Settings extends Component
         if (is_array($definitions)) {
             foreach($definitions as $key => $value) {
                 if (is_string($value)) {
-                    if (preg_match('/%(.*?)\|(.*?)%/', $value, $matches) === 1) {
+                    if (preg_match('/^%([^|%]+)\|([^%]*)%$/', $value, $matches) === 1) {
                         $definitions[$key] = $this->get($matches[1], $matches[2]);
-                    } else if (preg_match('/%(.*?)%/', $value, $matches) === 1) {
-                        if (isset($this->settings[$matches[1]])) {
-                            $definitions[$key] = $this->settings[$matches[1]];
+                    } else if (preg_match('/^%([^|%]+)%$/', $value, $matches) === 1) {
+                        $settings = $this->getSettings();
+                        if (array_key_exists($matches[1], $settings)) {
+                            $definitions[$key] = $settings[$matches[1]];
                         }
                     }
                     
@@ -138,7 +147,7 @@ class Settings extends Component
      */
     public function canGetProperty($name, $checkVars = true, $checkBehaviors = true)
     {
-        return isset($this->settings[$name]) || parent::canGetProperty($name, $checkVars, $checkBehaviors);
+        return array_key_exists($name, $this->getSettings()) || parent::canGetProperty($name, $checkVars, $checkBehaviors);
     }
 
     /**
@@ -146,7 +155,7 @@ class Settings extends Component
      */
     public function __get($name)
     {
-        if (isset($this->settings[$name])) {
+        if (array_key_exists($name, $this->getSettings())) {
             return $this->get($name);
         }
 
@@ -158,7 +167,12 @@ class Settings extends Component
      */
     public function canSetProperty($name, $checkVars = true, $checkBehaviors = true)
     {
-        return isset($this->settings[$name]) || parent::canSetProperty($name, $checkVars, $checkBehaviors);
+        if (parent::canSetProperty($name, $checkVars, $checkBehaviors)) {
+            return true;
+        }
+
+        // Read-only properties (getter exists, no setter) are not settable
+        return !method_exists($this, 'get' . $name) && !method_exists($this, 'set' . $name);
     }
 
     /**
@@ -166,10 +180,12 @@ class Settings extends Component
      */
     public function __set($name, $value)
     {
-        if (isset($this->settings[$name])) {
-            $this->set($name, $value);
-        } else {
+        if (parent::canSetProperty($name)) {
             parent::__set($name, $value);
+        } elseif (method_exists($this, 'get' . $name) || !$this->_initialized) {
+            parent::__set($name, $value); // throws read-only / unknown property exception
+        } else {
+            $this->set($name, $value);
         }
     }
 
@@ -182,10 +198,12 @@ class Settings extends Component
     {
         if ($this->_settings === null) {
             if ($this->cache) {
+                $tableName = $this->db->getSchema()->getRawTableName($this->table);
                 $this->_settings = $this->cache->getOrSet($this->cacheKey, function() {
                     return $this->fetchSettings();
                 }, $this->cacheDuration, new \yii\caching\DbDependency([
-                    'sql' => 'SELECT MAX(updated_at), COUNT(*) FROM ' . $this->table
+                    'db' => $this->db,
+                    'sql' => 'SELECT MAX(updated_at), COUNT(*) FROM ' . $this->db->quoteTableName($tableName),
                 ]));
             } else {
                 $this->_settings = $this->fetchSettings();
@@ -207,7 +225,7 @@ class Settings extends Component
         $query = (new Query())
             ->from($this->table);
 
-        foreach($query->each(100, Yii::$app->db) as $setting) {
+        foreach($query->each(100, $this->db) as $setting) {
             $settings[$setting['key']] = $this->decodeValue($setting['value'], $setting['type']);
         }
 
@@ -225,19 +243,15 @@ class Settings extends Component
         switch ($type) {
             case static::TYPE_ARRAY:
                 return Json::decode($value);
-                break;
             case static::TYPE_INTEGER:
                 return (int)$value;
-                break;
             case static::TYPE_FLOAT:
                 return (float)$value;
-                break;
             case static::TYPE_BOOLEAN:
                 return (bool)$value;
-                break;
             case static::TYPE_STRING:
+            default:
                 return (string)$value;
-                break;
         }
     }
 
@@ -288,7 +302,8 @@ class Settings extends Component
      */
     public function get($key, $default = null, $saveDefault = false)
     {
-        $value = ArrayHelper::getValue($this->settings, $key);
+        $settings = $this->getSettings();
+        $value = array_key_exists($key, $settings) ? $settings[$key] : null;
 
         if ($value === null) {
             $value = $default;
@@ -320,11 +335,18 @@ class Settings extends Component
                 $type = $this->detectType($value);
             }
             
+            $now = date('Y-m-d H:i:s');
+
             $this->db->createCommand()->upsert($this->table, [
                 'key' => $key,
                 'type' => $type,
                 'value' => $this->encodeValue($value, $type),
-                'updated_at' => date('Y-m-d H:i:s')
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], [
+                'type' => $type,
+                'value' => $this->encodeValue($value, $type),
+                'updated_at' => $now,
             ])->execute();
         }
 
