@@ -28,6 +28,7 @@
         }
     ],
     "require": {
+        "php": ">=7.3",
         "yiisoft/yii2": "~2.0.14"
     },
     "require-dev": {

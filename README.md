@@ -15,7 +15,7 @@ Dynamic key-value settings for Yii2 with database storage, automatic type castin
 - Magic property access: `$settings->key` to read/write
 - Config placeholders: inject settings into component configs via `%setting.name|default%`
 - Works with any RDBMS supported by Yii2 (MySQL, PostgreSQL, SQLite, etc.)
-- PHP 7.2+ and PHP 8.x compatible
+- PHP 7.3+ and PHP 8.x compatible
 
 ## Installation
 
@@ -219,7 +219,7 @@ MIT. See [LICENSE](LICENSE).
 - Доступ через магические свойства: `$settings->key`
 - Подстановка настроек в конфиги компонентов: `%setting.name|default%`
 - Работает с любой СУБД, поддерживаемой Yii2
-- Совместим с PHP 7.2+ и PHP 8.x
+- Совместим с PHP 7.3+ и PHP 8.x
 
 ## Установка
 
