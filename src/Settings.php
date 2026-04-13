@@ -4,19 +4,20 @@ namespace Smartass\Yii2Settings;
 
 use Yii;
 use yii\base\Application;
+use yii\base\BootstrapInterface;
 use yii\base\Component;
 use yii\db\Query;
 use yii\di\Instance;
 use yii\helpers\Json;
 
 /**
- * Компонент настроек приложения. 
- * 
+ * Компонент настроек приложения.
+ *
  * @property array $settings
- * 
+ *
  * @author Smartass <ed.smartass@gmail.com>
  */
-class Settings extends Component
+class Settings extends Component implements BootstrapInterface
 {
     /**
      * Тип: `Целое число`
@@ -103,9 +104,15 @@ class Settings extends Component
         }
 
         $this->_initialized = true;
+    }
 
+    /**
+     * {@inheritdoc}
+     */
+    public function bootstrap($app)
+    {
         if ($this->processConfig) {
-            Yii::$app->on(Application::EVENT_BEFORE_ACTION, function() {
+            $app->on(Application::EVENT_BEFORE_ACTION, function () {
                 foreach (Yii::$app->getComponents() as $id => $definition) {
                     if (is_array($definition) && !Yii::$app->has($id, true)) {
                         Yii::$app->set($id, $this->processConfig($definition));

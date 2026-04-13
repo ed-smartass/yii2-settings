@@ -139,11 +139,12 @@ $settings->set('code', 42, Settings::TYPE_STRING);
 
 ### Config placeholders
 
-Enable `processConfig` to inject settings into not-yet-initialized component configs:
+Enable `processConfig` and add the component to `bootstrap` so the event handler is registered at application start:
 
 ```php
 // app config
 return [
+    'bootstrap' => ['settings'],
     'components' => [
         'settings' => [
             'class' => 'Smartass\Yii2Settings\Settings',
@@ -347,10 +348,11 @@ $settings->set('code', 42, Settings::TYPE_STRING);
 
 ### Подстановка в конфиги
 
-Включите `processConfig` для подстановки настроек в конфиги ещё не инициализированных компонентов:
+Включите `processConfig` и добавьте компонент в `bootstrap`, чтобы обработчик события был зарегистрирован при старте приложения:
 
 ```php
 return [
+    'bootstrap' => ['settings'],
     'components' => [
         'settings' => [
             'class' => 'Smartass\Yii2Settings\Settings',
