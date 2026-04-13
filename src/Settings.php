@@ -7,7 +7,6 @@ use yii\base\Application;
 use yii\base\Component;
 use yii\db\Query;
 use yii\di\Instance;
-use yii\helpers\ArrayHelper;
 use yii\helpers\Json;
 
 /**
@@ -100,8 +99,10 @@ class Settings extends Component
 
         if ($this->processConfig) {
             Yii::$app->on(Application::EVENT_BEFORE_ACTION, function() {
-                foreach(Yii::$app->getComponents() as $id => $definition) {
-                    Yii::$app->set($id, $this->processConfig($definition));
+                foreach (Yii::$app->getComponents() as $id => $definition) {
+                    if (is_array($definition) && !Yii::$app->has($id, true)) {
+                        Yii::$app->set($id, $this->processConfig($definition));
+                    }
                 }
             });
         }
@@ -119,8 +120,9 @@ class Settings extends Component
                     if (preg_match('/^%([^|%]+)\|([^%]*)%$/', $value, $matches) === 1) {
                         $definitions[$key] = $this->get($matches[1], $matches[2]);
                     } else if (preg_match('/^%([^|%]+)%$/', $value, $matches) === 1) {
-                        if (isset($this->settings[$matches[1]])) {
-                            $definitions[$key] = $this->settings[$matches[1]];
+                        $settings = $this->getSettings();
+                        if (array_key_exists($matches[1], $settings)) {
+                            $definitions[$key] = $settings[$matches[1]];
                         }
                     }
                     
@@ -138,7 +140,7 @@ class Settings extends Component
      */
     public function canGetProperty($name, $checkVars = true, $checkBehaviors = true)
     {
-        return isset($this->settings[$name]) || parent::canGetProperty($name, $checkVars, $checkBehaviors);
+        return array_key_exists($name, $this->getSettings()) || parent::canGetProperty($name, $checkVars, $checkBehaviors);
     }
 
     /**
@@ -146,7 +148,7 @@ class Settings extends Component
      */
     public function __get($name)
     {
-        if (isset($this->settings[$name])) {
+        if (array_key_exists($name, $this->getSettings())) {
             return $this->get($name);
         }
 
@@ -286,7 +288,8 @@ class Settings extends Component
      */
     public function get($key, $default = null, $saveDefault = false)
     {
-        $value = ArrayHelper::getValue($this->settings, $key);
+        $settings = $this->getSettings();
+        $value = array_key_exists($key, $settings) ? $settings[$key] : null;
 
         if ($value === null) {
             $value = $default;

@@ -512,6 +512,47 @@ class SettingsTest extends TestCase
         $this->assertNull($method->invoke($this->settings, null));
     }
 
+    public function testProcessConfigSkipsInitializedComponents()
+    {
+        $this->destroyApplication();
+        $this->mockApplication([
+            'components' => [
+                'settings' => [
+                    'class' => 'Smartass\Yii2Settings\Settings',
+                    'processConfig' => true,
+                ],
+                'testComponent' => [
+                    'class' => 'yii\base\Component',
+                    'behaviors' => [],
+                ],
+            ],
+        ]);
+
+        // Recreate table
+        \Yii::$app->db->createCommand(
+            'CREATE TABLE {{%setting}} (
+                "key" VARCHAR(255) NOT NULL PRIMARY KEY,
+                "type" VARCHAR(255),
+                "value" TEXT,
+                "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
+                "updated_at" DATETIME DEFAULT CURRENT_TIMESTAMP
+            )'
+        )->execute();
+
+        // Force initialize db and settings components
+        $db = \Yii::$app->db;
+        $settings = \Yii::$app->settings;
+
+        // Verify that 'db' is already instantiated and won't be re-processed
+        $this->assertTrue(\Yii::$app->has('db', true));
+
+        // testComponent should NOT be instantiated yet
+        $this->assertFalse(\Yii::$app->has('testComponent', true));
+
+        // Cleanup
+        \Yii::$app->db->createCommand()->dropTable('{{%setting}}')->execute();
+    }
+
     // ─── Multiple operations ───
 
     public function testSetMultipleAndFlush()
@@ -529,13 +570,13 @@ class SettingsTest extends TestCase
 
     // ─── Special characters in keys ───
 
-    public function testSpecialCharactersInKey()
+    public function testDotNotationKeysWorkCorrectly()
     {
         $this->settings->set('app.mail.smtp-host', 'mail.example.com');
 
-        // Direct DB check since dot-notation in ArrayHelper::getValue traverses arrays
-        $row = (new \yii\db\Query())->from('{{%setting}}')->where(['key' => 'app.mail.smtp-host'])->one();
-        $this->assertSame('mail.example.com', $row['value']);
+        // After removing ArrayHelper::getValue, dots in keys are treated as literal characters
+        $this->assertSame('mail.example.com', $this->settings->get('app.mail.smtp-host'));
+        $this->assertSame('mail.example.com', $this->settings->{'app.mail.smtp-host'});
     }
 
     // ─── Explicit type override ───
