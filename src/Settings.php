@@ -160,7 +160,12 @@ class Settings extends Component
      */
     public function canSetProperty($name, $checkVars = true, $checkBehaviors = true)
     {
-        return parent::canSetProperty($name, $checkVars, $checkBehaviors) || !method_exists($this, 'get' . $name);
+        if (parent::canSetProperty($name, $checkVars, $checkBehaviors)) {
+            return true;
+        }
+
+        // Read-only properties (getter exists, no setter) are not settable
+        return !method_exists($this, 'get' . $name) && !method_exists($this, 'set' . $name);
     }
 
     /**
@@ -170,6 +175,8 @@ class Settings extends Component
     {
         if (parent::canSetProperty($name)) {
             parent::__set($name, $value);
+        } elseif (method_exists($this, 'get' . $name)) {
+            parent::__set($name, $value); // throws read-only property exception
         } else {
             $this->set($name, $value);
         }
@@ -328,6 +335,10 @@ class Settings extends Component
                 'type' => $type,
                 'value' => $this->encodeValue($value, $type),
                 'created_at' => $now,
+                'updated_at' => $now,
+            ], [
+                'type' => $type,
+                'value' => $this->encodeValue($value, $type),
                 'updated_at' => $now,
             ])->execute();
         }

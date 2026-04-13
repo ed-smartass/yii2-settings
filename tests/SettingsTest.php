@@ -72,7 +72,7 @@ class SettingsTest extends TestCase
 
         $this->settings->set('bool_false', false);
         // false is encoded as 0, decoded via (bool) → false
-        $this->assertIsBool($this->settings->get('bool_false'));
+        $this->assertSame(false, $this->settings->get('bool_false'));
     }
 
     public function testSetArray()
@@ -270,6 +270,12 @@ class SettingsTest extends TestCase
         $this->assertSame('fresh value', $this->settings->get('brand_new_key'));
     }
 
+    public function testMagicSetterThrowsOnReadOnlyProperty()
+    {
+        $this->expectException(\yii\base\InvalidCallException::class);
+        $this->settings->settings = ['should', 'throw'];
+    }
+
     // ─── canGetProperty / canSetProperty ───
 
     public function testCanGetPropertyForExistingSetting()
@@ -355,6 +361,18 @@ class SettingsTest extends TestCase
         $row = (new \yii\db\Query())->from('{{%setting}}')->where(['key' => 'timed'])->one();
         $this->assertNotNull($row['created_at']);
         $this->assertNotNull($row['updated_at']);
+    }
+
+    public function testCreatedAtIsPreservedOnUpdate()
+    {
+        $this->settings->set('key', 'first');
+        $row1 = (new \yii\db\Query())->from('{{%setting}}')->where(['key' => 'key'])->one();
+        $createdAt = $row1['created_at'];
+
+        $this->settings->set('key', 'second');
+        $row2 = (new \yii\db\Query())->from('{{%setting}}')->where(['key' => 'key'])->one();
+
+        $this->assertSame($createdAt, $row2['created_at']);
     }
 
     // ─── Cache integration ───
