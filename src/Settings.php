@@ -76,11 +76,16 @@ class Settings extends Component
     public $processConfig = false;
 
     /**
-     * Настройки. 
+     * Настройки.
      *
      * @var array|null
      */
     protected $_settings;
+
+    /**
+     * @var bool
+     */
+    protected $_initialized = false;
 
     /**
      * {@inheritdoc}
@@ -96,6 +101,8 @@ class Settings extends Component
         if ($this->cache && !$this->cacheKey) {
             throw new \yii\base\InvalidConfigException('The "cacheKey" property must be set when using cache.');
         }
+
+        $this->_initialized = true;
 
         if ($this->processConfig) {
             Yii::$app->on(Application::EVENT_BEFORE_ACTION, function() {
@@ -175,8 +182,8 @@ class Settings extends Component
     {
         if (parent::canSetProperty($name)) {
             parent::__set($name, $value);
-        } elseif (method_exists($this, 'get' . $name)) {
-            parent::__set($name, $value); // throws read-only property exception
+        } elseif (method_exists($this, 'get' . $name) || !$this->_initialized) {
+            parent::__set($name, $value); // throws read-only / unknown property exception
         } else {
             $this->set($name, $value);
         }

@@ -32,7 +32,7 @@
         "yiisoft/yii2": "~2.0.14"
     },
     "require-dev": {
-        "phpunit/phpunit": "^8.0",
+        "phpunit/phpunit": "^8.5 || ^9.5",
         "yidas/yii2-composer-bower-skip": "^2.0"
     },
     "repositories": [

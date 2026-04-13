@@ -109,12 +109,18 @@ $settings->settings; // ['per_page' => 25, 'maintenance' => false, ...]
 
 ### Magic property access
 
-```php
-// Read
-$name = Yii::$app->settings->site_name;
+Magic properties work for keys that are valid PHP identifiers (e.g. `site_name`).
+Keys containing dots or hyphens (e.g. `site.name`, `smtp-host`) require `get()`/`set()` or brace syntax.
 
-// Write (creates or updates)
+```php
+// Read / write simple keys
+$name = Yii::$app->settings->site_name;
 Yii::$app->settings->site_name = 'New Name';
+
+// Dot / hyphen keys — use get()/set() or brace syntax
+$host = Yii::$app->settings->get('mail.smtp-host');
+Yii::$app->settings->set('mail.smtp-host', 'smtp.example.com');
+$host = Yii::$app->settings->{'mail.smtp-host'};
 ```
 
 ### Explicit type override
@@ -313,12 +319,18 @@ $settings->settings; // ['per_page' => 25, 'maintenance' => false, ...]
 
 ### Магические свойства
 
-```php
-// Чтение
-$name = Yii::$app->settings->site_name;
+Магические свойства работают для ключей, являющихся допустимыми идентификаторами PHP (например `site_name`).
+Для ключей с точками или дефисами (например `site.name`, `smtp-host`) используйте `get()`/`set()` или фигурные скобки.
 
-// Запись (создаёт или обновляет)
+```php
+// Чтение / запись простых ключей
+$name = Yii::$app->settings->site_name;
 Yii::$app->settings->site_name = 'Новое имя';
+
+// Ключи с точками / дефисами — через get()/set() или фигурные скобки
+$host = Yii::$app->settings->get('mail.smtp-host');
+Yii::$app->settings->set('mail.smtp-host', 'smtp.example.com');
+$host = Yii::$app->settings->{'mail.smtp-host'};
 ```
 
 ### Явное указание типа

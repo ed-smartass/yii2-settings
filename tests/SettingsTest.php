@@ -437,6 +437,50 @@ class SettingsTest extends TestCase
         \Yii::$app->db->createCommand()->dropTable('{{%setting}}')->execute();
     }
 
+    public function testWorksWithCustomDbConnection()
+    {
+        $this->destroyApplication();
+        $this->mockApplication([
+            'components' => [
+                'db2' => [
+                    'class' => \yii\db\Connection::class,
+                    'dsn' => 'sqlite::memory:',
+                ],
+                'settings' => [
+                    'class' => 'Smartass\Yii2Settings\Settings',
+                    'db' => 'db2',
+                    'cache' => null,
+                ],
+            ],
+        ]);
+
+        // Create table on db2 only (NOT on default db)
+        \Yii::$app->db2->createCommand(
+            'CREATE TABLE {{%setting}} (
+                "key" VARCHAR(255) NOT NULL PRIMARY KEY,
+                "type" VARCHAR(255),
+                "value" TEXT,
+                "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
+                "updated_at" DATETIME DEFAULT CURRENT_TIMESTAMP
+            )'
+        )->execute();
+
+        $settings = \Yii::$app->settings;
+        $settings->set('custom_db', 'works');
+        $this->assertSame('works', $settings->get('custom_db'));
+        $this->assertSame(42, $settings->get('missing', 42));
+
+        // Verify data is in db2
+        $row = (new \yii\db\Query())
+            ->from('{{%setting}}')
+            ->where(['key' => 'custom_db'])
+            ->one(\Yii::$app->db2);
+        $this->assertSame('works', $row['value']);
+
+        // Cleanup
+        \Yii::$app->db2->createCommand()->dropTable('{{%setting}}')->execute();
+    }
+
     // ─── Invalid config ───
 
     public function testEmptyCacheKeyThrowsException()
@@ -537,11 +581,8 @@ class SettingsTest extends TestCase
             'components' => [
                 'settings' => [
                     'class' => 'Smartass\Yii2Settings\Settings',
+                    'cache' => null,
                     'processConfig' => true,
-                ],
-                'testComponent' => [
-                    'class' => 'yii\base\Component',
-                    'behaviors' => [],
                 ],
             ],
         ]);
@@ -557,15 +598,19 @@ class SettingsTest extends TestCase
             )'
         )->execute();
 
-        // Force initialize db and settings components
+        // Force-initialize db and settings (these are now "loaded" instances)
         $db = \Yii::$app->db;
         $settings = \Yii::$app->settings;
-
-        // Verify that 'db' is already instantiated and won't be re-processed
         $this->assertTrue(\Yii::$app->has('db', true));
 
-        // testComponent should NOT be instantiated yet
-        $this->assertFalse(\Yii::$app->has('testComponent', true));
+        // Remember the db instance identity before the event
+        $dbBefore = \Yii::$app->db;
+
+        // Trigger EVENT_BEFORE_ACTION — the processConfig handler runs here
+        \Yii::$app->trigger(\yii\base\Application::EVENT_BEFORE_ACTION);
+
+        // db was already instantiated, so it must NOT have been reset
+        $this->assertSame($dbBefore, \Yii::$app->db);
 
         // Cleanup
         \Yii::$app->db->createCommand()->dropTable('{{%setting}}')->execute();
